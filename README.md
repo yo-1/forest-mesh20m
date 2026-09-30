@@ -100,6 +100,13 @@ tests/                     core のテスト
 
 ## 未検証・未実装
 
-- アルゴリズム②の実機動作、系VIII 以外と JGD2000 の EPSG、QGIS 3.34 / 3.40、Python 3.9、Qt6 版 QGIS。
+- アルゴリズム②の「出力後にレイヤを読み込む」の実機動作（②の出力自体は QGIS 3.44.11 で確認済み）、系VIII 以外と JGD2000 の EPSG、QGIS 3.34 / 3.40、Python 3.9、Qt6 版 QGIS。
 - ファイル単位図郭の枝番の公式との照合。
 - 属性の集計（本数・樹高・材積など）、GeoPackage スタイル、ベクトルタイルは対象外。
+
+## ライセンス
+
+GNU General Public License v2.0 or later（GPL-2.0-or-later）。全文は [LICENSE](LICENSE) を参照。
+QGIS 本体のライセンスに合わせている。
+
+Copyright (C) 2026 Yoichi Wada
