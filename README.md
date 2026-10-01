@@ -3,6 +3,10 @@
 森林資源量集計メッシュ（20m・国土基本図図郭ベース）の**格子だけを作成する** QGIS プラグイン。
 準拠仕様: 森林情報に関するオープンデータ標準仕様書 Ver.2.1【航空レーザ森林資源解析データ編】（令和8年8月版）
 
+## ドキュメント
+
+[機能説明書](docs/feature.md)／[仕様書](docs/specification.md)／[操作マニュアル](docs/user-manual.md)（[一覧](docs/README.md)）
+
 ## 状態（v0.4.0・実験版）
 
 | 項目 | 状況 |
@@ -115,6 +119,7 @@ forest_mesh20m/            <- QGIS にインストールされるプラグイン
     provider.py
   core/                    QGIS 非依存の計算（zukaku, grid, crs, coverage, zone_mesh, naming）
 tests/                     core のテスト
+docs/                      機能説明書・仕様書・操作マニュアル（Markdown）
 ```
 
 ## 仕様書に記載がなく、本実装で仮定している点
