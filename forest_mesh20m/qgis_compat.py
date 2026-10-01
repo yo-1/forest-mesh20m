@@ -62,3 +62,18 @@ def make_field(name: str, kind: str, length: int = 0) -> QgsField:
 
         qtype = QVariant.String if kind == "string" else QVariant.Int
     return QgsField(name, qtype, "", length)
+
+
+def double_number_type():
+    if hasattr(Qgis, "ProcessingNumberParameterType"):
+        return Qgis.ProcessingNumberParameterType.Double
+    return QgsProcessingParameterNumber.Double
+
+
+def field_any_type():
+    """QgsProcessingParameterField の type 引数（全型の属性を選べる）。"""
+    if hasattr(Qgis, "ProcessingFieldParameterDataType"):
+        return Qgis.ProcessingFieldParameterDataType.Any
+    from qgis.core import QgsProcessingParameterField
+
+    return QgsProcessingParameterField.Any
