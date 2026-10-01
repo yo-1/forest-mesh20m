@@ -141,7 +141,8 @@ class CreateMeshAlgorithm(QgsProcessingAlgorithm):
             raise QgsProcessingException(self.invalidSinkError(parameters, self.OUTPUT))
 
         if shape == "line":
-            self._write_lines(sink, fields, ranges, feedback)
+            if not self._write_lines(sink, fields, ranges, feedback):
+                feedback.pushWarning("キャンセルされました。出力は不完全です（一部の範囲が書き込まれていません）。")
         else:
             done = [0]
 
@@ -151,6 +152,7 @@ class CreateMeshAlgorithm(QgsProcessingAlgorithm):
 
             for mesh_range in ranges:
                 if not common.write_mesh_range(sink, fields, mesh_range, system, shape, feedback, on_written):
+                    feedback.pushWarning("キャンセルされました。出力は不完全です（一部の範囲が書き込まれていません）。")
                     break
 
         return {self.OUTPUT: dest_id}
@@ -159,7 +161,7 @@ class CreateMeshAlgorithm(QgsProcessingAlgorithm):
     def _write_lines(sink, fields, ranges, feedback):
         for i, mesh_range in enumerate(ranges):
             if feedback.isCanceled():
-                break
+                return False
             features = []
             for ln in grid.grid_lines(mesh_range):
                 feature = QgsFeature(fields)
@@ -173,5 +175,6 @@ class CreateMeshAlgorithm(QgsProcessingAlgorithm):
                 )
                 feature.setAttributes([ln.kind, int(ln.boundary_no)])
                 features.append(feature)
-            sink.addFeatures(features, QgsFeatureSink.FastInsert)
+            common.add_features_checked(sink, features)
             feedback.setProgress(100.0 * (i + 1) / len(ranges))
+        return True

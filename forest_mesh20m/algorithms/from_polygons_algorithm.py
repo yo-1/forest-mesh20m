@@ -93,7 +93,7 @@ class CreateMeshFromPolygonsAlgorithm(QgsProcessingAlgorithm):
             "対象面積の割合）を近似します。被覆率がしきい値以上のメッシュを採用します"
             "（0 は 1 サンプルでも重なれば採用。検出の分解能は 1/(n x n)）。\n"
             "・複数の領域にまたがるメッシュは、「中心点を含む領域 → 被覆率が大きい領域 → 領域の並び順」"
-            "の優先で 1 つの領域にだけ割り当てます（欠落も重複もありません）。"
+            "の優先で 1 つの領域にだけ割り当てます（しきい値を満たした候補の間では欠落も重複もありません。サンプル点にかからない重なりは検出されません）。"
             "「重複して入れる」を選ぶと、しきい値を満たした領域すべてに入れます。\n"
             "・厳密な交差面積ではなく近似です。細分数を上げると精度が上がり、時間も増えます。\n\n"
             "【出力】\n"
@@ -433,7 +433,7 @@ class CreateMeshFromPolygonsAlgorithm(QgsProcessingAlgorithm):
         area = pixel * pixel  # 1 サンプルの面積 [㎡]
         ha = lambda samples: samples * area / 10000.0  # noqa: E731
         feedback.pushInfo(
-            "    採用 %d メッシュ / 採用面積 %.2f ha（平面直角座標上）" % (stats.n_adopted, ha(stats.adopted_samples))
+            "    採用 %d メッシュ / 採用セル内の対象被覆面積 %.2f ha（近似・平面直角座標上。セル全体の面積は採用数×0.04 ha）" % (stats.n_adopted, ha(stats.adopted_samples))
         )
         feedback.pushInfo(
             "    被覆率の分布（境界セルの件数）: "
