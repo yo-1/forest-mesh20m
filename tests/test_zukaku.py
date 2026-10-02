@@ -66,6 +66,31 @@ class TestCoordinateToMesh(unittest.TestCase):
         r, c = z.xy_to_rowcol(299980.0001, -159980.0001)
         self.assertEqual((int(r), int(c)), (0, 0))
 
+    def test_boundary_cases_east_west_axis(self):
+        # 境界 easting=100020.0（col 13000 と 13001 の境）。境界ちょうどは東側(13001)、-1e-9 は西側(13000)。
+        for easting, expected_col in ((100020.0 - 1e-9, 13000), (100020.0, 13001), (100020.0 + 1e-9, 13001)):
+            with self.subTest(easting=easting):
+                _, c = z.xy_to_rowcol(50000.0 + 10.0, easting)
+                self.assertEqual(int(c), expected_col)
+
+    def test_boundary_cases_north_south_axis(self):
+        # 境界 northing=50020.0（row 12498 と 12499 の境）。境界ちょうどは南側(12499)、+1e-9 は北側(12498)。
+        for northing, expected_row in ((50020.0 + 1e-9, 12498), (50020.0, 12499), (50020.0 - 1e-9, 12499)):
+            with self.subTest(northing=northing):
+                r, _ = z.xy_to_rowcol(northing, 10.0)
+                self.assertEqual(int(r), expected_row)
+
+    def test_boundary_rule_is_consistent_with_cell_bounds_everywhere(self):
+        # セルの西辺・北辺の座標をそのまま逆変換すると、必ずそのセル自身に戻る（全域からの抽出）。
+        rng = np.random.default_rng(0)
+        rows = rng.integers(1, z.TOTAL_ROWS, 20000)
+        cols = rng.integers(0, z.TOTAL_COLS, 20000)
+        n_max, e_min, _, _ = z.rowcol_to_bounds(rows, cols)
+        # 北辺の座標は「その北辺を持つセル」の内側（南側）に属する。わずかに南の点が自分に戻ることを確認する
+        r_back, c_back = z.xy_to_rowcol(n_max - 1e-9, e_min)
+        self.assertTrue(np.array_equal(r_back, rows))
+        self.assertTrue(np.array_equal(c_back, cols))
+
     def test_out_of_extent_raises(self):
         bad_points = [
             (300000.0001, 0.0),
