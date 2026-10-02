@@ -91,6 +91,18 @@ class TestCoordinateToMesh(unittest.TestCase):
         self.assertTrue(np.array_equal(r_back, rows))
         self.assertTrue(np.array_equal(c_back, cols))
 
+    def test_cell_coordinates_are_exact_integers(self):
+        # 仕様: セル座標は整数の行・列から整数演算で作るため、座標・辺長・面積に浮動小数点誤差が出ない。
+        rng = np.random.default_rng(1)
+        rows = rng.integers(0, z.TOTAL_ROWS, 200000)
+        cols = rng.integers(0, z.TOTAL_COLS, 200000)
+        n_max, e_min, n_min, e_max = z.rowcol_to_bounds(rows, cols)
+        self.assertTrue(np.array_equal(n_max, 300000 - rows * 20))
+        self.assertTrue(np.array_equal(e_min, -160000 + cols * 20))
+        self.assertTrue(np.all(n_max == np.floor(n_max)) and np.all(e_min == np.floor(e_min)))
+        self.assertTrue(np.all(e_max - e_min == 20) and np.all(n_max - n_min == 20))
+        self.assertTrue(np.all((e_max - e_min) * (n_max - n_min) == 400.0))
+
     def test_out_of_extent_raises(self):
         bad_points = [
             (300000.0001, 0.0),
