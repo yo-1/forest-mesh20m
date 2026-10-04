@@ -52,13 +52,12 @@ def open_gpkg_layer(path, layer_name, fields, shape, crs, transform_context, fir
 
 
 def close_writer(writer) -> None:
-    """writer を閉じてファイルへ確定させる（参照を手放すことで閉じる）。"""
-    ok = writer.flushBuffer()
-    error = writer.hasError()
-    message = writer.errorMessage() if error else ""
-    del writer
-    if ok is False or error != _enum_value("WriterError", "NoError"):
-        raise QgsProcessingException("GeoPackage への書き込みの確定に失敗しました。%s" % message)
+    """バッファを確定する。呼び出し元が writer の参照を手放してファイルを閉じる。"""
+    if not writer.flushBuffer():
+        raise QgsProcessingException(
+            "GeoPackage の書き込み確定に失敗しました。出力は不完全です: %s"
+            % (writer.lastError() or writer.errorMessage() or "原因不明")
+        )
 
 
 def open_temporary_layer(context, fields, shape, crs):
@@ -100,8 +99,9 @@ def build_features(
 
 def add_features(sink, features: List[QgsFeature]) -> bool:
     ok = sink.addFeatures(features, QgsFeatureSink.FastInsert)
-    if ok is False:
-        last_error = getattr(sink, "lastError", None)
-        detail = last_error() if callable(last_error) else ""
-        raise QgsProcessingException("出力先へのメッシュ追加に失敗しました。%s" % detail)
+    if not ok:
+        raise QgsProcessingException(
+            "メッシュの書き込みに失敗しました。出力は不完全です: %s"
+            % (sink.lastError() or "原因不明")
+        )
     return True

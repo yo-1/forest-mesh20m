@@ -18,6 +18,7 @@ from .. import qgis_compat as compat
 from ..core import crs as crs_core
 from ..core import grid
 from ..core.grid import MeshRange
+from . import outputs
 
 # 1 回に処理するメッシュ数。メモリ使用量と進捗表示の細かさのバランス。
 BAND_CELLS = 50_000
@@ -92,20 +93,6 @@ def read_area(
         raise QgsProcessingException(str(exc))
 
 
-def add_features_checked(sink, features) -> None:
-    """sink.addFeatures の失敗（False）を検出して Processing 例外にする。
-
-    失敗を無視すると、不完全なファイルが正常完了・自動読込として扱われるため。
-    """
-    if not features:
-        return
-    ok = sink.addFeatures(features, QgsFeatureSink.FastInsert)
-    if ok is False:
-        last_error = getattr(sink, "lastError", None)
-        detail = last_error() if callable(last_error) else ""
-        raise QgsProcessingException("出力先へのメッシュ追加に失敗しました。%s" % detail)
-
-
 def write_mesh_range(
     sink,
     fields: QgsFields,
@@ -137,6 +124,6 @@ def write_mesh_range(
                 feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(ec[i], nc[i])))
                 feature.setAttributes([ids[i], zukaku[i]])
                 features.append(feature)
-        add_features_checked(sink, features)
-        on_written(len(features))  # 追加成功後にだけ件数へ加算する
+        outputs.add_features(sink, features)
+        on_written(len(features))
     return True

@@ -108,6 +108,44 @@ def total_bands(zone_ranges: Iterable[MeshRange], cells_per_band: int) -> int:
     return sum(len(list(iter_row_bands(r, cells_per_band))) for r in zone_ranges)
 
 
+def process_zone_exact(
+    zone_range: MeshRange,
+    cells_per_band: int,
+    threshold_pct: float,
+    area_fn: Callable[[MeshRange], np.ndarray],
+    on_band: OnBand,
+    is_canceled: Callable[[], bool] = lambda: False,
+    on_progress: Callable[[], None] = lambda: None,
+) -> ZoneStats:
+    """各セルの厳密な交差面積から採否を決める。別領域の所有判定は行わない。"""
+    if not 0 <= threshold_pct <= 100:
+        raise ValueError("しきい値は 0〜100 [%] で指定してください")
+    stats = ZoneStats()
+    for band in iter_row_bands(zone_range, cells_per_band):
+        if is_canceled():
+            stats.canceled = True
+            return stats
+        areas = area_fn(band)
+        if areas.shape != (band.n_rows, band.n_cols):
+            raise ValueError("交差面積の配列形状が帯と一致しません")
+        if not np.all(np.isfinite(areas)) or np.any(areas < 0):
+            raise ValueError("交差面積に不正な値があります")
+        pct = areas * 100.0 / 400.0
+        eligible = (areas > 0) & (pct >= threshold_pct)
+        stats.total_samples += float(areas.sum())
+        stats.adopted_samples += float(areas[eligible].sum())
+        stats.dropped_by_threshold_samples += float(areas[(areas > 0) & ~eligible].sum())
+        for i, (lo, hi) in enumerate(zip((0, 10, 25, 50, 75, 90), (10, 25, 50, 75, 90, 100))):
+            stats.histogram[i] += int(np.count_nonzero((pct > lo) & (pct <= hi) & (areas < 400)))
+        stats.histogram[6] += int(np.count_nonzero(areas >= 400))
+        rows, cols = cv.adopted_rowcol(eligible, band)
+        if rows.size:
+            on_band(rows, cols, np.rint(pct[eligible]).astype(np.int64))
+            stats.n_adopted += int(rows.size)
+        on_progress()
+    return stats
+
+
 def cells_per_band_for(subsample: int, max_cells: int = 200_000, max_samples: int = 8_000_000) -> int:
     """1 帯のサンプル数（セル数 x n^2）が max_samples を超えないようにセル数を決める。"""
     return max(1, min(max_cells, max_samples // (subsample * subsample)))

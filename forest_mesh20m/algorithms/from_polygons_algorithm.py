@@ -1,8 +1,8 @@
 """Processing アルゴリズム: 領域ポリゴン（流域・県など）に合わせて 20m メッシュを作る。
 
 領域ごとに別レイヤ（GeoPackage の 1 テーブル）へ出力する。マスク（地域森林計画対象林など）が
-あれば「領域 ∩ マスク」を対象にする。採用は被覆率のしきい値で決め、領域をまたぐセルは
-1 つの領域にだけ割り当てる（取りこぼし・重複なし）。手法は「簡易」（細分格子へのラスタ化）。
+あれば「領域 ∩ マスク」を対象にする。既定では厳密な交差面積が正のセルを
+各領域に重複を許して出力する。従来の排他割当も選択できる。
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import numpy as np
 from qgis.core import (
     QgsCoordinateTransform,
     QgsFeatureRequest,
+    QgsGeometry,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
     QgsProcessingException,
@@ -88,14 +89,12 @@ class CreateMeshFromPolygonsAlgorithm(QgsProcessingAlgorithm):
         return (
             "領域ポリゴン（流域・県・解析範囲など）1 件ごとに、20m メッシュのレイヤを 1 つ作ります。\n"
             "マスク（地域森林計画対象林など）を指定すると、「領域 ∩ マスク」にかかるメッシュだけを作ります。\n\n"
-            "【採用の規則（簡易手法）】\n"
-            "・各メッシュを細分した格子（細分数 n x n）に領域をラスタ化し、被覆率（メッシュ 400㎡ に対する"
-            "対象面積の割合）を近似します。被覆率がしきい値以上のメッシュを採用します"
-            "（0 は 1 サンプルでも重なれば採用。検出の分解能は 1/(n x n)）。\n"
-            "・複数の領域にまたがるメッシュは、「中心点を含む領域 → 被覆率が大きい領域 → 領域の並び順」"
-            "の優先で 1 つの領域にだけ割り当てます（しきい値を満たした候補の間では欠落も重複もありません。サンプル点にかからない重なりは検出されません）。"
-            "「重複して入れる」を選ぶと、しきい値を満たした領域すべてに入れます。\n"
-            "・厳密な交差面積ではなく近似です。細分数を上げると精度が上がり、時間も増えます。\n\n"
+            "【採用の規則】\n"
+            "・既定の重複出力では、各領域（マスク指定時は領域∩マスク）と正の面積で交差する"
+            "20m正方形を領域ごとに出力します。境界セルは両領域に入ります。"
+            "被覆率は厳密な交差面積 / 400㎡です。0%は面積が正なら採用します。\n"
+            "・排他割当を選んだ場合のみ、従来の細分ラスタ近似と中心点・被覆率による所有判定を使います。"
+            "このモードでは境界の細い交差を見落とす可能性があります。\n\n"
             "【出力】\n"
             "・GeoPackage（推奨）: 1 つのファイルに領域ごとのレイヤを書き出します。同名ファイルがあれば中止します。\n"
             "・一時レイヤ: 上限（メッシュ数の合計）を超えると中止します。大きな範囲では使わないでください。\n"
@@ -159,8 +158,8 @@ class CreateMeshFromPolygonsAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterEnum(
                 self.EXCLUSIVE,
                 "複数の領域にまたがるメッシュ",
-                options=["1 つの領域にだけ割り当てる（推奨）", "しきい値を満たす領域すべてに重複して入れる"],
-                defaultValue=0,
+                options=["1 つの領域にだけ割り当てる（旧方式・近似）", "交差する領域すべてに重複して入れる（推奨・厳密）"],
+                defaultValue=1,
             )
         )
         self.addParameter(
@@ -312,8 +311,8 @@ class CreateMeshFromPolygonsAlgorithm(QgsProcessingAlgorithm):
         crs = common.make_crs(system, datum, feedback)
         zones = self._load_zones(zones_source, name_field, crs, context, feedback)
         names = naming.make_layer_names(prefix, [z.label for z in zones])
-        feedback.pushInfo("領域: %d 件 / 細分数 %d / しきい値 %.1f%% / 重複の扱い: %s / マスク: %s" % (
-            len(zones), subsample, threshold, "1 領域に割り当て" if exclusive else "重複して入れる",
+        feedback.pushInfo("領域: %d 件 / 細分数 %d（排他割当時のみ） / しきい値 %.1f%% / 重複の扱い: %s / マスク: %s" % (
+            len(zones), subsample, threshold, "1 領域に割り当て（近似）" if exclusive else "重複して入れる（厳密）",
             "あり" if mask_source is not None else "なし"))
 
         read_mask = (
@@ -365,12 +364,9 @@ class CreateMeshFromPolygonsAlgorithm(QgsProcessingAlgorithm):
         fields.append(compat.make_field(FIELD_COVER_PCT, "int"))
         written_total = [0]
         to_load = []
-        any_incomplete = False
-
         for zone in zones:
             if feedback.isCanceled():
-                any_incomplete = True
-                break
+                raise QgsProcessingException("処理がキャンセルされました。出力は不完全です。")
             name = names[zone.index]
             if mode == MODE_GPKG:
                 sink = outputs.open_gpkg_layer(
@@ -384,29 +380,71 @@ class CreateMeshFromPolygonsAlgorithm(QgsProcessingAlgorithm):
 
             def on_band(rows, cols, cover):
                 if mode == MODE_TEMP:
-                    written_total[0] += len(rows)
-                    if written_total[0] > temp_max:
+                    if written_total[0] + len(rows) > temp_max:
                         raise QgsProcessingException(
                             "一時レイヤのメッシュ数が上限 %d を超えました。出力先を GeoPackage にしてください。" % temp_max
                         )
                 outputs.add_features(sink, outputs.build_features(fields, system, shape, rows, cols, cover))
+                if mode == MODE_TEMP:
+                    written_total[0] += len(rows)
 
             try:
-                stats = zm.process_zone(
-                    zone.index, zone.mesh_range, subsample, threshold, exclusive, cells_per_band,
-                    samples_fn, mask_fn if read_mask is not None else None, neighbors_fn, on_band,
-                    is_canceled=feedback.isCanceled, on_progress=on_progress,
-                )
-            finally:
+                if exclusive:
+                    stats = zm.process_zone(
+                        zone.index, zone.mesh_range, subsample, threshold, True, cells_per_band,
+                        samples_fn, mask_fn if read_mask is not None else None, neighbors_fn, on_band,
+                        is_canceled=feedback.isCanceled, on_progress=on_progress,
+                    )
+                else:
+                    def exact_areas(band):
+                        n_max, e_min, n_min, e_max = band.bounds()
+                        window = QgsRectangle(e_min, n_min, e_max, n_max)
+                        if not zone.bbox.intersects(window):
+                            return np.zeros((band.n_rows, band.n_cols), dtype=np.float64)
+                        geom = zone.geom
+                        if read_mask is not None:
+                            mask_geoms = read_mask(band)
+                            if not mask_geoms:
+                                return np.zeros((band.n_rows, band.n_cols), dtype=np.float64)
+                            geom = geom.intersection(QgsGeometry.unaryUnion(mask_geoms))
+                            if geom is None or geom.isNull() or geom.isEmpty():
+                                return np.zeros((band.n_rows, band.n_cols), dtype=np.float64)
+                        candidates = rasterize.rasterize_band([geom], band, 1, all_touched=True)
+                        areas = np.zeros(candidates.shape, dtype=np.float64)
+                        engine = QgsGeometry.createGeometryEngine(geom.constGet())
+                        engine.prepareGeometry()
+                        for row, col in zip(*np.nonzero(candidates)):
+                            if feedback.isCanceled():
+                                break
+                            cell = QgsRectangle(e_min + int(col) * CELL_SIZE_M,
+                                                n_max - (int(row) + 1) * CELL_SIZE_M,
+                                                e_min + (int(col) + 1) * CELL_SIZE_M,
+                                                n_max - int(row) * CELL_SIZE_M)
+                            cell_geom = QgsGeometry.fromRect(cell)
+                            if engine.contains(cell_geom.constGet()):
+                                areas[row, col] = CELL_SIZE_M * CELL_SIZE_M
+                                continue
+                            intersection = geom.intersection(cell_geom)
+                            if intersection is None:
+                                raise QgsProcessingException("境界セルの交差面積を計算できません。")
+                            if intersection.isNull() or intersection.isEmpty():
+                                continue
+                            areas[row, col] = max(0.0, intersection.area())
+                        return areas
+
+                    stats = zm.process_zone_exact(
+                        zone.mesh_range, cells_per_band, threshold, exact_areas, on_band,
+                        is_canceled=feedback.isCanceled, on_progress=on_progress,
+                    )
                 if mode == MODE_GPKG:
                     outputs.close_writer(sink)
+            finally:
+                if mode == MODE_GPKG:
                     del sink
 
-            self._log_stats(feedback, name, stats, pixel, zone, mask_source is not None, threshold)
+            self._log_stats(feedback, name, stats, pixel if exclusive else 1.0, zone, mask_source is not None, threshold)
             if stats.canceled:
-                feedback.pushWarning("キャンセルされました。レイヤ %s は不完全です。" % name)
-                any_incomplete = True
-                break
+                raise QgsProcessingException("処理がキャンセルされました。レイヤ %s は不完全です。" % name)
             if stats.n_adopted == 0:
                 feedback.pushWarning("レイヤ %s: 採用されたメッシュが 0 件です（領域とマスクの重なり・しきい値・系を確認）。" % name)
             if mode == MODE_GPKG:
@@ -424,8 +462,6 @@ class CreateMeshFromPolygonsAlgorithm(QgsProcessingAlgorithm):
                 context.addLayerToLoadOnCompletion(
                     source_id, QgsProcessingContext.LayerDetails(name, context.project(), name)
                 )
-        if any_incomplete and gpkg_path:
-            feedback.pushWarning("処理が完了しなかったため、%s は不完全です。" % gpkg_path)
         return {self.OUTPUT_GPKG: gpkg_path} if gpkg_path else {}
 
     @staticmethod
@@ -433,7 +469,7 @@ class CreateMeshFromPolygonsAlgorithm(QgsProcessingAlgorithm):
         area = pixel * pixel  # 1 サンプルの面積 [㎡]
         ha = lambda samples: samples * area / 10000.0  # noqa: E731
         feedback.pushInfo(
-            "    採用 %d メッシュ / 採用セル内の対象被覆面積 %.2f ha（近似・平面直角座標上。セル全体の面積は採用数×0.04 ha）" % (stats.n_adopted, ha(stats.adopted_samples))
+            "    採用 %d メッシュ / 採用面積 %.2f ha（平面直角座標上）" % (stats.n_adopted, ha(stats.adopted_samples))
         )
         feedback.pushInfo(
             "    被覆率の分布（境界セルの件数）: "
@@ -450,6 +486,6 @@ class CreateMeshFromPolygonsAlgorithm(QgsProcessingAlgorithm):
             covered = stats.total_samples * area
             if expected > 0 and abs(covered - expected) / expected > 0.01:
                 feedback.pushWarning(
-                    "    領域の面積 %.2f ha とラスタ化した面積 %.2f ha が 1%% 以上ずれています。細分数を上げるか、"
+                    "    領域の面積 %.2f ha と計算した面積 %.2f ha が 1%% 以上ずれています。細分数を上げるか、"
                     "ジオメトリ（無効・極端に細長い形状）を確認してください。" % (expected / 10000.0, covered / 10000.0)
                 )

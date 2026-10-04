@@ -27,7 +27,7 @@ def _memory_vector_datasource():
     raise QgsProcessingException("GDAL のメモリ用ベクタドライバ（Memory/MEM）を利用できません。")
 
 
-def rasterize_band(geometries: Sequence[QgsGeometry], band: MeshRange, subsample: int) -> np.ndarray:
+def rasterize_band(geometries: Sequence[QgsGeometry], band: MeshRange, subsample: int, all_touched: bool = False) -> np.ndarray:
     """帯の範囲を (n_rows*n, n_cols*n) の uint8 にラスタ化し、ポリゴン内のサンプルを 1 にする。
 
     GDAL の既定（ALL_TOUCHED=FALSE）はピクセル中心がポリゴン内のときに焼き込むため、
@@ -61,7 +61,7 @@ def rasterize_band(geometries: Sequence[QgsGeometry], band: MeshRange, subsample
         feature.SetGeometry(ogr_geometry)
         layer.CreateFeature(feature)
     if layer.GetFeatureCount() > 0:
-        result = gdal.RasterizeLayer(target, [1], layer, burn_values=[1], options=["ALL_TOUCHED=FALSE"])
+        result = gdal.RasterizeLayer(target, [1], layer, burn_values=[1], options=["ALL_TOUCHED=TRUE" if all_touched else "ALL_TOUCHED=FALSE"])
         if result != 0:
             raise QgsProcessingException("GDAL のラスタ化に失敗しました（戻り値 %r）。" % result)
     array = target.GetRasterBand(1).ReadAsArray()
