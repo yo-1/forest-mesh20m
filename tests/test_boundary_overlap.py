@@ -1,8 +1,8 @@
 """境界セルを複数領域へ収録する厳密面積判定の回帰試験。"""
 import numpy as np
 
-from work.forest_mesh20m.core.grid import MeshRange
-from work.forest_mesh20m.core.zone_mesh import process_zone_exact
+from forest_mesh20m.core.grid import MeshRange
+from forest_mesh20m.core.zone_mesh import process_zone_exact
 
 
 def run(areas, threshold=0):
