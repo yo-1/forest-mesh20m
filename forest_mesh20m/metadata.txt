@@ -2,8 +2,8 @@
 name=森林資源量メッシュ（20m）生成プラグイン
 qgisMinimumVersion=3.34
 description=森林資源量集計メッシュ(20m)の格子を国土基本図図郭ベースで作成する
-about=森林情報に関するオープンデータ標準仕様書 Ver.2.1（航空レーザ森林資源解析データ編）に基づく20mメッシュ（JF20mID付き）を、ポリゴン/ポイント/格子線で作成するProcessingアルゴリズムを提供します。属性の集計機能は含みません。
-version=0.3.2
+about=森林情報に関するオープンデータ標準仕様書 Ver.2.1（航空レーザ森林資源解析データ編）に基づく20mメッシュ（JF20mID付き）を、ポリゴン/ポイント/格子線で作成するProcessingアルゴリズムと、領域ポリゴン（流域など）・マスクに合わせて領域ごとに別レイヤで作成するアルゴリズムを提供します。属性の集計機能は含みません。
+version=0.4.2
 author=Yoichi Wada
 homepage=https://github.com/yo-1/forest-mesh20m
 tracker=https://github.com/yo-1/forest-mesh20m/issues
@@ -11,4 +11,4 @@ repository=https://github.com/yo-1/forest-mesh20m
 hasProcessingProvider=yes
 experimental=True
 tags=forest,mesh,zukaku,processing,japan
-changelog=0.3.2 図郭ごと出力に「出力後にレイヤを読み込む」を追加 / 0.3.1 図郭名入力の小文字・全角を許容 / 0.3.0 図郭ごとにGeoPackage出力するアルゴリズムを追加 / 0.2.1 プラグイン名を日本語名に変更 / 0.2.0 メッシュ生成アルゴリズム
+changelog=0.4.2 領域ポリゴンの境界セルを厳密な交差面積で判定し領域間の重複出力を既定に変更 / 0.4.1 書き込み失敗・確定失敗・キャンセルをエラーとして報告し不完全出力を完成品扱いしない / 0.4.0 領域ポリゴン・マスクに合わせて領域ごとに別レイヤで作成するアルゴリズムを追加（簡易手法・被覆率しきい値） / 0.3.2 図郭ごと出力に「出力後にレイヤを読み込む」を追加 / 0.3.1 図郭名入力の小文字・全角を許容 / 0.3.0 図郭ごとにGeoPackage出力するアルゴリズムを追加 / 0.2.1 プラグイン名を日本語名に変更 / 0.2.0 メッシュ生成アルゴリズム

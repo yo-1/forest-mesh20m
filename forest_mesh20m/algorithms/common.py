@@ -18,6 +18,7 @@ from .. import qgis_compat as compat
 from ..core import crs as crs_core
 from ..core import grid
 from ..core.grid import MeshRange
+from . import outputs
 
 # 1 回に処理するメッシュ数。メモリ使用量と進捗表示の細かさのバランス。
 BAND_CELLS = 50_000
@@ -123,6 +124,6 @@ def write_mesh_range(
                 feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(ec[i], nc[i])))
                 feature.setAttributes([ids[i], zukaku[i]])
                 features.append(feature)
-        sink.addFeatures(features, QgsFeatureSink.FastInsert)
+        outputs.add_features(sink, features)
         on_written(len(features))
     return True

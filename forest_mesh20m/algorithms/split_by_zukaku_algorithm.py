@@ -193,7 +193,7 @@ class SplitByZukakuAlgorithm(QgsProcessingAlgorithm):
 
         for index, (code, mesh_range, path) in enumerate(plan, start=1):
             if feedback.isCanceled():
-                break
+                raise QgsProcessingException("処理がキャンセルされました。未作成の図郭があります。")
             layer_name = zk.gpkg_layer_name(code, year)
             # QGIS のログにも現れる、OGR 出力先の書式。パス中の ' はエスケープする。
             destination = "ogr:dbname='%s' table=\"%s\" (geom)" % (
@@ -209,8 +209,7 @@ class SplitByZukakuAlgorithm(QgsProcessingAlgorithm):
             completed = common.write_mesh_range(sink, fields, mesh_range, system, shape, feedback, on_written)
             del sink  # 参照を手放して書き込みを確定・ファイルを閉じる
             if not completed:
-                feedback.pushWarning("キャンセルされました。%s は不完全です。" % path)
-                break
+                raise QgsProcessingException("処理がキャンセルされました。%s は不完全です。" % path)
             if load_after:
                 # 完了したファイルだけを、処理終了後にプロジェクトへ追加する。
                 context.addLayerToLoadOnCompletion(
