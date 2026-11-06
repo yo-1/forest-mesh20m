@@ -126,6 +126,11 @@ def process_zone_exact(
             stats.canceled = True
             return stats
         areas = area_fn(band)
+        # area_fn は計算の途中でキャンセルされると、未計算のセルを 0 のまま返すことがある。
+        # 最後の帯でこれを見逃すと、欠落のある出力を完成品として扱ってしまうため、返った直後にも確認する。
+        if is_canceled():
+            stats.canceled = True
+            return stats
         if areas.shape != (band.n_rows, band.n_cols):
             raise ValueError("交差面積の配列形状が帯と一致しません")
         if not np.all(np.isfinite(areas)) or np.any(areas < 0):

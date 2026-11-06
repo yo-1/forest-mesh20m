@@ -260,7 +260,7 @@ tests/                       core の単体テスト（unittest）
 
 | 区分 | 内容 | 状況 |
 |---|---|---|
-| 単体テスト（unittest） | zukaku, grid, crs, coverage, zone_mesh, naming, boundary_overlap, write_failures。正常系、境界値、異常系、旧方式の所有規則の無欠落・無重複、帯分割の不変性、書き込み失敗の検出、厳密判定の採否 | 106 件通過（2026-10-08、Python 3.11） |
+| 単体テスト（unittest） | zukaku, grid, crs, coverage, zone_mesh, naming, boundary_overlap, write_failures, independent_oracle（実装から独立した期待値）。正常系、境界値、異常系、旧方式の所有規則の無欠落・無重複、帯分割の不変性、書き込み失敗の検出、厳密判定の採否 | 124 件通過（2026-11-06、Python 3.13） |
 | 配線テスト（偽 qgis） | パラメータ・呼び出し順・エラー・読み込み登録の確認。実 API との一致は保証しない | 実行済み（リポジトリには未収録） |
 | 実機（QGIS 3.44.11） | ①②の出力、既存プラグインとの図郭照合 | 確認済み |
 | 実機（QGIS 3.44.13・Windows） | ③の重複出力：2 領域・マスクあり・しきい値 0%（出力 EPSG:6676／6677）、独立照合で欠落・余分・重複・被覆率不一致が 0 | 確認済み（小範囲。PR #12、2026-10-05〜06） |
