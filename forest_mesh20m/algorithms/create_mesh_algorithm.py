@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from qgis.core import (
     QgsFeature,
-    QgsFeatureSink,
     QgsGeometry,
     QgsPointXY,
     QgsProcessingAlgorithm,

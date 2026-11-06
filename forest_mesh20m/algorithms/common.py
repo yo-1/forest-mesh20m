@@ -6,7 +6,6 @@ from typing import Callable, List, Optional, Tuple
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsFeature,
-    QgsFeatureSink,
     QgsFields,
     QgsGeometry,
     QgsPointXY,
