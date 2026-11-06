@@ -1,6 +1,6 @@
 # 仕様書：森林資源量メッシュ（20m）生成プラグイン
 
-バージョン 0.4.2（実験版）／対象 QGIS 3.34 以降（動作確認は 3.44.11・Windows。③の重複出力は 3.44.13・Windows で小範囲を確認）／GPL-2.0-or-later
+バージョン 0.4.2（実験版）／対象 QGIS 3.38 以降（動作確認は 3.44.11・Windows。③の重複出力は 3.44.13・Windows で小範囲を確認）／GPL-2.0-or-later
 
 本書は、プラグインの入出力・計算規則・内部構成を定義します。機能の概要は機能説明書、操作手順は操作マニュアルを参照してください。「仮定」「未検証」と書いた箇所は、仕様書や実機で確認できていない事項です。
 
@@ -27,7 +27,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| QGIS | 3.34 以降（metadata の qgisMinimumVersion）。実機確認は 3.44.11（Windows）のみ |
+| QGIS | 3.38 以降（metadata の qgisMinimumVersion）。実機確認は 3.44.11（Windows）のみ |
 | Python | 3.9 以上で解析できる構文。外部依存は numpy（QGIS 同梱）のみ |
 | GDAL（osgeo） | ③で使用。QGIS 同梱。実機の GDAL は 3.13.0 |
 | 配布 | QGIS プラグイン（ZIP）。Processing プロバイダ（hasProcessingProvider=yes）として登録 |

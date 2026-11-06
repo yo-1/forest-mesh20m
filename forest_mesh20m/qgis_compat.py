@@ -2,13 +2,12 @@
 
 QGIS 3.x の途中で列挙型や QgsField のコンストラクタが変わっているため、
 バージョン依存の分岐をこのファイルだけに閉じ込める。
-未検証: 実機の QGIS ではまだ動かしていない。QGIS 3.34 / 3.40 / 3.44 で要確認。
+最低対応版は QGIS 3.38（QgsField の QMetaType コンストラクタ導入版）。
 """
 from __future__ import annotations
 
 from qgis.core import Qgis, QgsField, QgsProcessing, QgsProcessingParameterNumber
 
-_NEW_FIELD_TYPES = Qgis.versionInt() >= 33800  # QgsField(name, QMetaType.Type) は 3.38 で導入
 
 
 def wkb_type(kind: str):
@@ -52,15 +51,15 @@ def integer_number_type():
 
 
 def make_field(name: str, kind: str, length: int = 0) -> QgsField:
-    """kind: 'string' | 'int'"""
-    if _NEW_FIELD_TYPES:
-        from qgis.PyQt.QtCore import QMetaType
+    """kind: 'string' | 'int'
 
-        qtype = QMetaType.Type.QString if kind == "string" else QMetaType.Type.Int
-    else:
-        from qgis.PyQt.QtCore import QVariant
+    QgsField の QMetaType コンストラクタ（QGIS 3.38 で導入）だけを使う。
+    Qt6 チェック（QGS402）が対象にする QVariant 側の型指定の
+    旧分岐は、最低版を 3.38 に上げて廃止した。
+    """
+    from qgis.PyQt.QtCore import QMetaType
 
-        qtype = QVariant.String if kind == "string" else QVariant.Int
+    qtype = QMetaType.Type.QString if kind == "string" else QMetaType.Type.Int
     return QgsField(name, qtype, "", length)
 
 

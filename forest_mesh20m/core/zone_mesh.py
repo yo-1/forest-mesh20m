@@ -6,7 +6,7 @@ QGIS 側は「帯ごとのサンプル配列を返す関数」だけを用意し
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Iterable, List, Optional, Tuple
+from typing import Callable, Iterable, List, Optional
 
 import numpy as np
 
