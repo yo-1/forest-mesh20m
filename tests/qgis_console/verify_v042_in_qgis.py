@@ -290,7 +290,7 @@ def compare_layer(layer, expected, tol=1e-9):
     return res
 
 
-def run_polygons(case, zones, thr=0.0, mask=None, labels=None, exclusive=False, subsample=1, name_field=True,
+def run_polygons_raw(case, zones, thr=0.0, mask=None, labels=None, exclusive=False, subsample=1, name_field=True,
                  expect_parts=None, crs_in="EPSG:6676", geoms=None, check=True):
     """zones: list of list-of-ring(parts)。expect_parts は期待値の元になる parts（既定は zones）。"""
     path = os.path.join(OUT, "%s.gpkg" % case)
@@ -333,6 +333,12 @@ def run_polygons(case, zones, thr=0.0, mask=None, labels=None, exclusive=False, 
     return out
 
 
+def run_polygons(case, *a, **k):
+    if not _want("CASES"):
+        return {"case": case, "skipped": True}
+    return run_polygons_raw(case, *a, **k)
+
+
 def summarize(r):
     """結果を短く整える。"""
     s = {k: r[k] for k in ("case", "thr", "exclusive", "mask", "ok", "seconds", "exception") if k in r}
@@ -349,7 +355,6 @@ def summarize(r):
 def functional():
     cases = []
     P = lambda *rings: [list(r) for r in rings]  # noqa: E731
-    # A: 隣接 2 領域。共有辺が格子線上にない
     zA = [[rect_ring(1000, 2000, "1107.25", 2090)], [rect_ring("1107.25", 2000, 1200, 2090)]]
     cases.append(run_polygons("A_adjacent_off_grid", zA))
     # B: 辺・点で接するだけ（格子線上）。重複も欠落もないこと
@@ -370,7 +375,7 @@ def functional():
     cases.append(run_polygons("D_shapes_mask_thr50", zD, thr=50, mask=maskD, labels=["tri", "L"]))
     # E: 旧方式（排他割当）。レイヤ間で重複しないこと（近似なので欠落の有無は参考）
     rE = run_polygons("E_exclusive_A", zA, exclusive=True, subsample=1, check=False)
-    if "exception" not in rE:
+    if "exception" not in rE and not rE.get("skipped"):
         ids = []
         for lab in ("z1", "z2"):
             lyr = read_gpkg_layer(os.path.join(OUT, "E_exclusive_A.gpkg"), "t_" + lab)
@@ -384,7 +389,7 @@ def functional():
     # F: 日本語の領域名・重複名・NULL 名
     gF = [QgsGeometry.fromWkt(wkt_poly([rect_ring(1000, 6000, 1040, 6040)])) for _ in range(3)]
     rF = run_polygons("F_names", None, labels=["流域A", "流域A", None], geoms=gF, check=False)
-    if "exception" not in rF:
+    if "exception" not in rF and not rF.get("skipped"):
         rF["tables"] = rF["gpkg"]["tables"]
     cases.append(rF)
     # G: 無効ジオメトリ（蝶ネクタイ）
@@ -400,95 +405,105 @@ def functional():
     zH = [[rect_ring(1000, 8000, 1100, 8100)]]
     for thr in (0, 1):
         cases.append(run_polygons("H_epsg6668_aligned_thr%d" % thr, zH, thr=thr, labels=["h"], geoms=[QgsGeometry(gH)], crs_in="EPSG:6668"))
-    # B1: 上書き防止・失敗系
-    base = os.path.join(OUT, "A_adjacent_off_grid.gpkg")
-    before = sha256(base)
-    fb = FB()
-    try:
-        processing.run(ALG + "create_mesh20m_from_polygons", {
-            "SYSTEM": SYSTEM_ENUM, "DATUM": 0, "ZONES": make_layer("z", [QgsGeometry.fromWkt(wkt_poly(zA[0]))]), "OUTPUT_MODE": 0,
-            "OUTPUT_GPKG": base, "THRESHOLD": 0, "SUBSAMPLE": 1, "EXCLUSIVE": 1, "SHAPE": 0}, feedback=fb)
-        overwrite = {"stopped": False}
-    except Exception as exc:  # noqa: BLE001
-        overwrite = {"stopped": True, "message": repr(exc)[:200], "file_unchanged": sha256(base) == before}
-    fail_paths = {}
-    blocker = os.path.join(OUT, "not_a_dir.txt")
-    with open(blocker, "w") as fh:
-        fh.write("x")
-    for label, target in (("parent_is_file", os.path.join(blocker, "x.gpkg")), ("missing_drive", "Q:\\no_such\\x.gpkg")):
-        if label == "missing_drive" and os.path.exists("Q:\\"):
-            continue
+    overwrite, fail_paths = {"skipped": True}, {"skipped": True}
+    if _want("B1"):
+        # B1: 上書き防止・失敗系
+        base = os.path.join(OUT, "A_adjacent_off_grid.gpkg")
+        if not os.path.exists(base):
+            run_polygons_raw("A_adjacent_off_grid", zA)
+        before = sha256(base)
+        fb = FB()
         try:
             processing.run(ALG + "create_mesh20m_from_polygons", {
                 "SYSTEM": SYSTEM_ENUM, "DATUM": 0, "ZONES": make_layer("z", [QgsGeometry.fromWkt(wkt_poly(zA[0]))]), "OUTPUT_MODE": 0,
-                "OUTPUT_GPKG": target, "THRESHOLD": 0, "SUBSAMPLE": 1, "EXCLUSIVE": 1, "SHAPE": 0}, feedback=FB())
-            fail_paths[label] = {"error_raised": False, "file_exists": os.path.exists(target)}
+                "OUTPUT_GPKG": base, "THRESHOLD": 0, "SUBSAMPLE": 1, "EXCLUSIVE": 1, "SHAPE": 0}, feedback=fb)
+            overwrite = {"stopped": False}
         except Exception as exc:  # noqa: BLE001
-            fail_paths[label] = {"error_raised": True, "message": repr(exc)[:200], "file_exists": os.path.exists(target)}
-    # LOAD（別 QgsProject へ。ユーザーのプロジェクトは触らない）
-    ctx = QgsProcessingContext()
-    proj = QgsProject()
-    ctx.setProject(proj)
-    loadpath = os.path.join(OUT, "LOAD_test.gpkg")
-    try:
-        processing.runAndLoadResults(ALG + "create_mesh20m_from_polygons", {
-            "SYSTEM": SYSTEM_ENUM, "DATUM": 0, "ZONES": make_layer("z", [QgsGeometry.fromWkt(wkt_poly(g)) for g in zA]),
-            "NAME_FIELD": "name", "OUTPUT_MODE": 0, "OUTPUT_GPKG": loadpath, "THRESHOLD": 0, "SUBSAMPLE": 1, "EXCLUSIVE": 1,
-            "SHAPE": 0, "LOAD": True, "LAYER_PREFIX": "t_"}, feedback=FB(), context=ctx)
-        loaded = {"layers": [(l.name(), l.isValid(), l.featureCount()) for l in proj.mapLayers().values()]}
-    except Exception as exc:  # noqa: BLE001
-        loaded = {"exception": repr(exc)[:300]}
-    # ② 図郭ごと出力
-    zdir = os.path.join(OUT, "zukaku_out")
-    zparams = {"SYSTEM": SYSTEM_ENUM, "DATUM": 0, "SHAPE": 0, "EXTENT": "-140100,-139900,284900,285100 [EPSG:6676]",
-               "YEAR": "2026", "OUTPUT_DIR": zdir, "WHOLE": False, "LOAD": False}
-    fbz = FB()
-    z2 = {}
-    try:
-        processing.run(ALG + "create_mesh20m_by_zukaku", zparams, feedback=fbz)
-        files = sorted(os.listdir(zdir))
-        z2["files"] = files
-        exp_all = {}
-        for r in range(int((TOP - 285100) / CELL), int((TOP - 284900) / CELL)):
-            for c in range(int((-140100 - LEFT) / CELL), int((-139900 - LEFT) / CELL)):
-                exp_all.setdefault(file_zukaku(SYSTEM, r, c), {})[(r, c)] = F(100)
-        z2["expected_files"] = sorted("fr_mesh20m_%s_2026.gpkg" % k for k in exp_all)
-        z2["per_file"] = {}
-        for k, cells in exp_all.items():
-            p = os.path.join(zdir, "fr_mesh20m_%s_2026.gpkg" % k)
-            lyr = QgsVectorLayer("%s|layername=fr_mesh20m_%s_2026" % (p.replace("\\", "/"), k), "x", "ogr")
-            got, bad = set(), 0
-            if lyr.isValid():
-                for f in lyr.getFeatures():
-                    s, r, c = decode_id12(f["JF20mID"])
-                    got.add((r, c))
-                    if f["file_zukaku"] != k or file_zukaku(s, r, c) != k or abs(f.geometry().area() - 400) > 1e-6:
-                        bad += 1
-            z2["per_file"][k] = {"valid": lyr.isValid(), "count": len(got), "expected": len(cells), "same_cells": got == set(cells),
-                                 "bad": bad, "crs": lyr.crs().authid(), "integrity": gpkg_tables(p)[0]}
-        z2["ok"] = (z2["files"] == z2["expected_files"] and all(v["valid"] and v["same_cells"] and v["bad"] == 0 for v in z2["per_file"].values()))
-        before = {f: sha256(os.path.join(zdir, f)) for f in z2["files"]}
+            overwrite = {"stopped": True, "message": repr(exc)[:200], "file_unchanged": sha256(base) == before}
+        fail_paths = {}
+        blocker = os.path.join(OUT, "not_a_dir.txt")
+        with open(blocker, "w") as fh:
+            fh.write("x")
+        for label, target in (("parent_is_file", os.path.join(blocker, "x.gpkg")), ("missing_drive", "Q:\\no_such\\x.gpkg")):
+            if label == "missing_drive" and os.path.exists("Q:\\"):
+                continue
+            try:
+                processing.run(ALG + "create_mesh20m_from_polygons", {
+                    "SYSTEM": SYSTEM_ENUM, "DATUM": 0, "ZONES": make_layer("z", [QgsGeometry.fromWkt(wkt_poly(zA[0]))]), "OUTPUT_MODE": 0,
+                    "OUTPUT_GPKG": target, "THRESHOLD": 0, "SUBSAMPLE": 1, "EXCLUSIVE": 1, "SHAPE": 0}, feedback=FB())
+                fail_paths[label] = {"error_raised": False, "file_exists": os.path.exists(target)}
+            except Exception as exc:  # noqa: BLE001
+                fail_paths[label] = {"error_raised": True, "message": repr(exc)[:200], "file_exists": os.path.exists(target)}
+    loaded = {"skipped": True}
+    if _want("LOAD"):
+        # LOAD（別 QgsProject へ。ユーザーのプロジェクトは触らない）
+        ctx = QgsProcessingContext()
+        proj = QgsProject()
+        ctx.setProject(proj)
+        loadpath = os.path.join(OUT, "LOAD_test.gpkg")
         try:
-            processing.run(ALG + "create_mesh20m_by_zukaku", zparams, feedback=FB())
-            z2["overwrite_stopped"] = False
+            processing.runAndLoadResults(ALG + "create_mesh20m_from_polygons", {
+                "SYSTEM": SYSTEM_ENUM, "DATUM": 0, "ZONES": make_layer("z", [QgsGeometry.fromWkt(wkt_poly(g)) for g in zA]),
+                "NAME_FIELD": "name", "OUTPUT_MODE": 0, "OUTPUT_GPKG": loadpath, "THRESHOLD": 0, "SUBSAMPLE": 1, "EXCLUSIVE": 1,
+                "SHAPE": 0, "LOAD": True, "LAYER_PREFIX": "t_"}, feedback=FB(), context=ctx)
+            loaded = {"layers": [(l.name(), l.isValid(), l.featureCount()) for l in proj.mapLayers().values()]}
         except Exception as exc:  # noqa: BLE001
-            z2["overwrite_stopped"] = True
-            z2["overwrite_message"] = repr(exc)[:160]
-        z2["unchanged_after_overwrite_attempt"] = before == {f: sha256(os.path.join(zdir, f)) for f in z2["files"]}
-    except Exception as exc:  # noqa: BLE001
-        z2["exception"] = repr(exc)[:300]
-    # ① 範囲作成（一時レイヤ）
-    o1 = {}
-    try:
-        res = processing.run(ALG + "create_mesh20m", {"SYSTEM": SYSTEM_ENUM, "DATUM": 0, "SHAPE": 0,
-                             "EXTENT": "-140100,-139900,284900,285100 [EPSG:6676]", "OUTPUT": "memory:"}, feedback=FB())
-        lyr = res["OUTPUT"]
-        ids = [f["JF20mID"] for f in lyr.getFeatures()]
-        exp = sorted(jf_id(SYSTEM, r, c) for r in range(int((TOP - 285100) / CELL), int((TOP - 284900) / CELL))
-                     for c in range(int((-140100 - LEFT) / CELL), int((-139900 - LEFT) / CELL)))
-        o1 = {"count": len(ids), "expected": len(exp), "same_ids": sorted(ids) == exp, "crs": lyr.crs().authid()}
-    except Exception as exc:  # noqa: BLE001
-        o1 = {"exception": repr(exc)[:300]}
+            loaded = {"exception": repr(exc)[:300]}
+    z2 = {"skipped": True}
+    if _want("Z2"):
+        # ② 図郭ごと出力
+        zdir = os.path.join(OUT, "zukaku_out")
+        zparams = {"SYSTEM": SYSTEM_ENUM, "DATUM": 0, "SHAPE": 0, "EXTENT": "-140100,-139900,284900,285100 [EPSG:6676]",
+                   "YEAR": "2026", "OUTPUT_DIR": zdir, "WHOLE": False, "LOAD": False}
+        fbz = FB()
+        z2 = {}
+        try:
+            processing.run(ALG + "create_mesh20m_by_zukaku", zparams, feedback=fbz)
+            files = sorted(os.listdir(zdir))
+            z2["files"] = files
+            exp_all = {}
+            for r in range(int((TOP - 285100) / CELL), int((TOP - 284900) / CELL)):
+                for c in range(int((-140100 - LEFT) / CELL), int((-139900 - LEFT) / CELL)):
+                    exp_all.setdefault(file_zukaku(SYSTEM, r, c), {})[(r, c)] = F(100)
+            z2["expected_files"] = sorted("fr_mesh20m_%s_2026.gpkg" % k for k in exp_all)
+            z2["per_file"] = {}
+            for k, cells in exp_all.items():
+                p = os.path.join(zdir, "fr_mesh20m_%s_2026.gpkg" % k)
+                lyr = QgsVectorLayer("%s|layername=fr_mesh20m_%s_2026" % (p.replace("\\", "/"), k), "x", "ogr")
+                got, bad = set(), 0
+                if lyr.isValid():
+                    for f in lyr.getFeatures():
+                        s, r, c = decode_id12(f["JF20mID"])
+                        got.add((r, c))
+                        if f["file_zukaku"] != k or file_zukaku(s, r, c) != k or abs(f.geometry().area() - 400) > 1e-6:
+                            bad += 1
+                z2["per_file"][k] = {"valid": lyr.isValid(), "count": len(got), "expected": len(cells), "same_cells": got == set(cells),
+                                     "bad": bad, "crs": lyr.crs().authid(), "integrity": gpkg_tables(p)[0]}
+            z2["ok"] = (z2["files"] == z2["expected_files"] and all(v["valid"] and v["same_cells"] and v["bad"] == 0 for v in z2["per_file"].values()))
+            before = {f: sha256(os.path.join(zdir, f)) for f in z2["files"]}
+            try:
+                processing.run(ALG + "create_mesh20m_by_zukaku", zparams, feedback=FB())
+                z2["overwrite_stopped"] = False
+            except Exception as exc:  # noqa: BLE001
+                z2["overwrite_stopped"] = True
+                z2["overwrite_message"] = repr(exc)[:160]
+            z2["unchanged_after_overwrite_attempt"] = before == {f: sha256(os.path.join(zdir, f)) for f in z2["files"]}
+        except Exception as exc:  # noqa: BLE001
+            z2["exception"] = repr(exc)[:300]
+    o1 = {"skipped": True}
+    if _want("O1"):
+        # ① 範囲作成（一時レイヤ）
+        o1 = {}
+        try:
+            res = processing.run(ALG + "create_mesh20m", {"SYSTEM": SYSTEM_ENUM, "DATUM": 0, "SHAPE": 0,
+                                 "EXTENT": "-140100,-139900,284900,285100 [EPSG:6676]", "OUTPUT": "memory:"}, feedback=FB())
+            lyr = res["OUTPUT"]
+            ids = [f["JF20mID"] for f in lyr.getFeatures()]
+            exp = sorted(jf_id(SYSTEM, r, c) for r in range(int((TOP - 285100) / CELL), int((TOP - 284900) / CELL))
+                         for c in range(int((-140100 - LEFT) / CELL), int((-139900 - LEFT) / CELL)))
+            o1 = {"count": len(ids), "expected": len(exp), "same_ids": sorted(ids) == exp, "crs": lyr.crs().authid()}
+        except Exception as exc:  # noqa: BLE001
+            o1 = {"exception": repr(exc)[:300]}
     return {"cases": [summarize(c) for c in cases], "overwrite_3": overwrite, "write_failures": fail_paths,
             "load_option": loaded, "alg2_zukaku": z2, "alg1_extent": o1}
 
