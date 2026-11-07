@@ -397,7 +397,7 @@ def functional():
         bow = QgsGeometry.fromWkt("POLYGON((1000 7000,1100 7100,1100 7000,1000 7100,1000 7000))")
         parts_bow = [[(F(1000), F(7000)), (F(1050), F(7050)), (F(1000), F(7100))],
                      [(F(1050), F(7050)), (F(1100), F(7100)), (F(1100), F(7000))]]
-        cases.append(run_polygons("G_invalid_bowtie", None, labels=["bow"], geoms=[bow], expect_parts=[parts_bow]))
+        cases.append(run_polygons_raw("G_invalid_bowtie", None, labels=["bow"], geoms=[bow], expect_parts=[parts_bow]))
     # H: 他座標系の領域（EPSG:6668）。格子線上の矩形を往復変換した微小誤差の影響を見る
     tr = QgsCoordinateTransform(QgsCoordinateReferenceSystem("EPSG:6676"), QgsCoordinateReferenceSystem("EPSG:6668"), QgsProject.instance())
     gH = QgsGeometry.fromWkt(wkt_poly([rect_ring(1000, 8000, 1100, 8100)]))
