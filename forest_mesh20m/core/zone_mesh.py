@@ -97,7 +97,7 @@ def process_zone(
 
         rows, cols = cv.adopted_rowcol(owned, band)
         if rows.size:
-            cover_pct = np.rint(count[owned] * 100.0 / (n * n)).astype(np.int64)
+            cover_pct = cv.round_half_up_pct(count[owned] * 100.0 / (n * n))
             on_band(rows, cols, cover_pct)
             stats.n_adopted += int(rows.size)
         on_progress()
@@ -126,6 +126,11 @@ def process_zone_exact(
             stats.canceled = True
             return stats
         areas = area_fn(band)
+        # area_fn は計算の途中でキャンセルされると、未計算のセルを 0 のまま返すことがある。
+        # 最後の帯でこれを見逃すと、欠落のある出力を完成品として扱ってしまうため、返った直後にも確認する。
+        if is_canceled():
+            stats.canceled = True
+            return stats
         if areas.shape != (band.n_rows, band.n_cols):
             raise ValueError("交差面積の配列形状が帯と一致しません")
         if not np.all(np.isfinite(areas)) or np.any(areas < 0):
@@ -140,7 +145,7 @@ def process_zone_exact(
         stats.histogram[6] += int(np.count_nonzero(areas >= 400))
         rows, cols = cv.adopted_rowcol(eligible, band)
         if rows.size:
-            on_band(rows, cols, np.rint(pct[eligible]).astype(np.int64))
+            on_band(rows, cols, cv.round_half_up_pct(pct[eligible]))
             stats.n_adopted += int(rows.size)
         on_progress()
     return stats
