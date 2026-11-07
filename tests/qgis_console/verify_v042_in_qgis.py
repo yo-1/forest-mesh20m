@@ -264,15 +264,10 @@ def compare_layer(layer, expected, tol=1e-9):
     for k in set(expected) & set(got):
         p = expected[k]
         hu = half_up(p)
-        be = round(p)
-        frac_tie = (p - math.floor(p)) == F(1, 2)
         if got[k] == hu:
             continue
-        if frac_tie and got[k] == be:
-            tie_ok += 1
-            continue
-        # 厳密でない境界（斜めの辺）の丸め誤差で .5 のごく近傍の場合のみ許容
-        if abs(float(p) - math.floor(p) - 0.5) < 1e-9 and got[k] in (hu, be):
+        # 斜辺など厳密でない境界の丸め誤差で、.5 のごく近傍（1e-9 以内）の場合だけ ±1 を許容して件数を記録する
+        if abs(float(p) - math.floor(p) - 0.5) < 1e-9 and (p - math.floor(p)) != F(1, 2) and got[k] in (hu, hu - 1):
             tie_ok += 1
             continue
         bad_pct.append((k, float(p), got[k]))
@@ -280,7 +275,7 @@ def compare_layer(layer, expected, tol=1e-9):
         crs=layer.crs().authid(), wkb=QgsWkbTypes.displayString(layer.wkbType()), count=len(got), expected=len(expected),
         dup_in_layer=dup, missing=missing[:5], n_missing=len(missing), extra=extra[:5], n_extra=len(extra),
         bad_geometry_or_id=bad_geom, bad_file_zukaku=bad_zk, bad_system=bad_sys, bad_pct=bad_pct[:5], n_bad_pct=len(bad_pct),
-        half_tie_banker_rounding=tie_ok,
+        half_tie_near_noise=tie_ok,
         fields=[(fld.name(), fld.typeName(), fld.length()) for fld in layer.fields()],
     )
     res["ok"] = (res["valid"] and dup == 0 and not missing and not extra and bad_geom == 0 and bad_zk == 0
@@ -337,7 +332,7 @@ def summarize(r):
     if "zones" in r:
         s["zones"] = {z: {k: v for k, v in d.items() if k in (
             "count", "expected", "n_missing", "n_extra", "n_bad_pct", "dup_in_layer", "bad_geometry_or_id",
-            "bad_file_zukaku", "half_tie_banker_rounding", "ok", "crs", "missing", "extra", "bad_pct")} for z, d in r["zones"].items()}
+            "bad_file_zukaku", "half_tie_near_noise", "ok", "crs", "missing", "extra", "bad_pct")} for z, d in r["zones"].items()}
     if "gpkg" in r:
         s["gpkg_integrity"] = r["gpkg"]["integrity"]
         s["tables"] = len(r["gpkg"]["tables"])

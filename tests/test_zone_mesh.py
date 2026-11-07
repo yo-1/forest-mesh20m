@@ -123,6 +123,14 @@ class ZoneMeshTest(unittest.TestCase):
         )
         self.assertTrue(st.canceled)
 
+    def test_old_method_cover_pct_never_hits_a_half_tie(self):
+        # 旧方式の細分数は奇数のみ。count*100/n^2 が .5 になるには 200*count/n^2 が奇数になる必要があるが、
+        # 分子は 8 の倍数・n^2 は奇数なので偶数にしかならない。よって四捨五入の規則の違いは旧方式には現れない。
+        for n in range(1, 16, 2):
+            for count in range(0, n * n + 1):
+                x = count * 100.0 / (n * n)
+                self.assertNotEqual(round(x % 1, 9), 0.5, (n, count))
+
     def test_cells_per_band_bounds_samples(self):
         for n in (1, 3, 5, 15):
             c = zm.cells_per_band_for(n)

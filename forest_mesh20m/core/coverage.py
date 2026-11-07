@@ -38,6 +38,18 @@ def center_flags(samples: np.ndarray, n: int) -> np.ndarray:
     return samples[half::n, half::n] != 0
 
 
+def round_half_up_pct(pct: np.ndarray) -> np.ndarray:
+    """被覆率 [%]（非負）を通常の四捨五入（ちょうど .5 は切り上げ）で整数にする。
+
+    NumPy の np.rint / Python の round は偶数丸め（2.5→2）なので使わない。
+    採否の判定には使わない: 採否は丸める前の面積・被覆率で決める。
+    """
+    pct = np.asarray(pct, dtype=np.float64)
+    if np.any(pct < 0):
+        raise ValueError("被覆率は 0 以上で指定してください")
+    return np.floor(pct + 0.5).astype(np.int64)
+
+
 def eligible(count: np.ndarray, n: int, threshold_pct: float) -> np.ndarray:
     """被覆率がしきい値以上のセル。しきい値 0 は「1 サンプルでも重なれば」。"""
     if not 0 <= threshold_pct <= 100:

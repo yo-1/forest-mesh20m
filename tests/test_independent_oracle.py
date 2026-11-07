@@ -151,8 +151,8 @@ class ExactAdoptionOracleTest(unittest.TestCase):
         exp = expected(ring, mesh_range, threshold, mask_rect)
         self.assertEqual(set(got), set(exp), "threshold=%r" % threshold)
         for k, p in exp.items():
-            # cover_pct は四捨五入の整数。ちょうど .5 のときは実装が偶数丸め（下の別テストで固定）
-            self.assertIn(got[k], {(p + F(1, 2)).__floor__(), round(p)}, (k, float(p)))
+            # cover_pct は四捨五入（.5 は切り上げ）の整数。独立に Fraction で求める
+            self.assertEqual(got[k], (p + F(1, 2)).__floor__(), (k, float(p)))
         return got, stats
 
     def test_threshold_boundaries_0_1_40_50_100(self):
@@ -221,15 +221,45 @@ class ExactAdoptionOracleTest(unittest.TestCase):
         b, _ = run_exact(ring, RANGE, 0, cells_per_band=10_000)
         self.assertEqual(a, b)
 
-    def test_cover_pct_half_rounding_is_banker_current_behavior(self):
-        # 判断待ち（報告書 D-1）: 文書は「四捨五入」だが実装は np.rint（偶数丸め）。
-        # 面積 10 ㎡ = 2.5% → 偶数丸めで 2（四捨五入なら 3）。仕様が確定したらこの期待値を更新する。
-        ring = rect(1000, 2000, 1020, "2000.5")
-        got, _ = run_exact(ring, RANGE, 0)
-        self.assertEqual(got[(R0 - 1, C0)], 2)
-        ring = rect(1000, 2000, 1020, "2000.75")  # 15 ㎡ = 3.75% → 4
-        got, _ = run_exact(ring, RANGE, 0)
-        self.assertEqual(got[(R0 - 1, C0)], 4)
+    def test_cover_pct_half_rounds_up(self):
+        # 方針（PR #18、2026-11-07）: 非負値の通常の四捨五入。ちょうど .5 は切り上げ（偶数丸めではない）
+        for height, expected_pct in (("2000.5", 3), ("2000.1015625", 1), ("2000.75", 4), ("2000.25", 1)):
+            # 面積 = 20 * (height-2000): 10㎡=2.5%→3、2.03125㎡=0.508%→1、15㎡=3.75%→4、5㎡=1.25%→1
+            got, _ = run_exact(rect(1000, 2000, 1020, height), RANGE, 0)
+            self.assertEqual(got[(R0 - 1, C0)], expected_pct, height)
+        # 面積 2 ㎡ = 0.5% → 1、面積 6 ㎡ = 1.5% → 2、面積 30 ㎡ = 7.5% → 8、面積 398 ㎡ = 99.5% → 100
+        for area, expected_pct in ((2, 1), (6, 2), (30, 8), (398, 100)):
+            got, _ = run_exact(rect(1000, 2000, 1020, 2000 + F(area, 20)), RANGE, 0)
+            self.assertEqual(got[(R0 - 1, C0)], expected_pct, area)
+
+    def test_selection_uses_unrounded_coverage(self):
+        # 丸め後の cover_pct がしきい値に届いても、丸め前が届かなければ採用しない
+        # 面積 3.9 ㎡ 相当（0.975%）: 丸めると 1 だが、しきい値 1% には届かない
+        area_fn = lambda band: np.full((band.n_rows, band.n_cols), 3.9)  # noqa: E731
+        got = []
+        process_zone_exact(MeshRange(0, 1, 0, 1), 10, 1, area_fn, lambda r, c, v: got.append(v.tolist()))
+        self.assertEqual(got, [])
+        got = []
+        process_zone_exact(MeshRange(0, 1, 0, 1), 10, 0, area_fn, lambda r, c, v: got.append(v.tolist()))
+        self.assertEqual(got, [[1]])  # しきい値 0 なら採用され、cover_pct は丸めて 1
+        # 面積 199.6 ㎡（49.9%）: 丸めると 50 だが、しきい値 50% には届かない
+        area_fn = lambda band: np.full((band.n_rows, band.n_cols), 199.6)  # noqa: E731
+        got = []
+        process_zone_exact(MeshRange(0, 1, 0, 1), 10, 50, area_fn, lambda r, c, v: got.append(v.tolist()))
+        self.assertEqual(got, [])
+        # 面積 0.4 ㎡（0.1%）: 丸めると 0 だが、面積が正なのでしきい値 0 で採用される（cover_pct は 0）
+        area_fn = lambda band: np.full((band.n_rows, band.n_cols), 0.4)  # noqa: E731
+        got = []
+        process_zone_exact(MeshRange(0, 1, 0, 1), 10, 0, area_fn, lambda r, c, v: got.append(v.tolist()))
+        self.assertEqual(got, [[0]])
+
+    def test_round_half_up_helper(self):
+        from forest_mesh20m.core.coverage import round_half_up_pct
+        values = [0, 0.4999, 0.5, 1.5, 2.5, 12.5, 49.5, 99.5, 100]
+        self.assertEqual(round_half_up_pct(np.array(values)).tolist(), [0, 0, 1, 2, 3, 13, 50, 100, 100])
+        self.assertEqual(round_half_up_pct(np.array(values)).dtype, np.int64)
+        with self.assertRaises(ValueError):
+            round_half_up_pct(np.array([-0.1]))
 
     def test_cancel_during_last_band_is_reported(self):
         # 回帰: area_fn が打ち切られた（未計算セルが 0 のまま返る）状態で最終帯に達しても canceled になる

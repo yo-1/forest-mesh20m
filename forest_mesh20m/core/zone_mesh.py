@@ -97,7 +97,7 @@ def process_zone(
 
         rows, cols = cv.adopted_rowcol(owned, band)
         if rows.size:
-            cover_pct = np.rint(count[owned] * 100.0 / (n * n)).astype(np.int64)
+            cover_pct = cv.round_half_up_pct(count[owned] * 100.0 / (n * n))
             on_band(rows, cols, cover_pct)
             stats.n_adopted += int(rows.size)
         on_progress()
@@ -145,7 +145,7 @@ def process_zone_exact(
         stats.histogram[6] += int(np.count_nonzero(areas >= 400))
         rows, cols = cv.adopted_rowcol(eligible, band)
         if rows.size:
-            on_band(rows, cols, np.rint(pct[eligible]).astype(np.int64))
+            on_band(rows, cols, cv.round_half_up_pct(pct[eligible]))
             stats.n_adopted += int(rows.size)
         on_progress()
     return stats
