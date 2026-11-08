@@ -442,11 +442,20 @@ def functional():
         ctx.setProject(proj)
         loadpath = os.path.join(OUT, "LOAD_test.gpkg")
         try:
-            processing.runAndLoadResults(ALG + "create_mesh20m_from_polygons", {
+            # runAndLoadResults は Dev Probe の execute_code 内（入れ子）で呼ぶと QGIS が応答しなくなる
+            # ことがあった（2026-11-07。GUI のダイアログ経由では正常）。そのため、プラグインが
+            # 「読み込み予定」として登録したレイヤ（layersToLoadOnCompletion）とその出典の有効性を検証する。
+            # GUI 経由の実読み込みは Processing ダイアログからの手動確認で補う。
+            processing.run(ALG + "create_mesh20m_from_polygons", {
                 "SYSTEM": SYSTEM_ENUM, "DATUM": 0, "ZONES": make_layer("z", [QgsGeometry.fromWkt(wkt_poly(g)) for g in zA]),
                 "NAME_FIELD": "name", "OUTPUT_MODE": 0, "OUTPUT_GPKG": loadpath, "THRESHOLD": 0, "SUBSAMPLE": 1, "EXCLUSIVE": 1,
                 "SHAPE": 0, "LOAD": True, "LAYER_PREFIX": "t_"}, feedback=FB(), context=ctx)
-            loaded = {"layers": [(l.name(), l.isValid(), l.featureCount()) for l in proj.mapLayers().values()]}
+            planned = ctx.layersToLoadOnCompletion()
+            checks = []
+            for src, det in planned.items():
+                lyr = QgsVectorLayer(src, det.name, "ogr")
+                checks.append((det.name, lyr.isValid(), lyr.featureCount() if lyr.isValid() else None))
+            loaded = {"planned_layers": sorted(checks), "ok": len(checks) == 2 and all(c[1] for c in checks)}
         except Exception as exc:  # noqa: BLE001
             loaded = {"exception": repr(exc)[:300]}
     z2 = {"skipped": True}
