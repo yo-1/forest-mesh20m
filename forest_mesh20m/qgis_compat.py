@@ -21,9 +21,9 @@ def wkb_type(kind: str):
     from qgis.core import QgsWkbTypes  # 古い QGIS 用
 
     return {
-        "polygon": QgsWkbTypes.Polygon,
-        "line": QgsWkbTypes.LineString,
-        "point": QgsWkbTypes.Point,
+        "polygon": QgsWkbTypes.Type.Polygon,
+        "line": QgsWkbTypes.Type.LineString,
+        "point": QgsWkbTypes.Type.Point,
     }[kind]
 
 
@@ -37,17 +37,17 @@ def sink_geometry_type(kind: str):
             "any": Qgis.ProcessingSourceType.VectorAnyGeometry,
         }[kind]
     return {
-        "polygon": QgsProcessing.TypeVectorPolygon,
-        "line": QgsProcessing.TypeVectorLine,
-        "point": QgsProcessing.TypeVectorPoint,
-        "any": QgsProcessing.TypeVectorAnyGeometry,
+        "polygon": QgsProcessing.SourceType.TypeVectorPolygon,
+        "line": QgsProcessing.SourceType.TypeVectorLine,
+        "point": QgsProcessing.SourceType.TypeVectorPoint,
+        "any": QgsProcessing.SourceType.TypeVectorAnyGeometry,
     }[kind]
 
 
 def integer_number_type():
     if hasattr(Qgis, "ProcessingNumberParameterType"):
         return Qgis.ProcessingNumberParameterType.Integer
-    return QgsProcessingParameterNumber.Integer
+    return QgsProcessingParameterNumber.Type.Integer
 
 
 def make_field(name: str, kind: str, length: int = 0) -> QgsField:
@@ -66,7 +66,7 @@ def make_field(name: str, kind: str, length: int = 0) -> QgsField:
 def double_number_type():
     if hasattr(Qgis, "ProcessingNumberParameterType"):
         return Qgis.ProcessingNumberParameterType.Double
-    return QgsProcessingParameterNumber.Double
+    return QgsProcessingParameterNumber.Type.Double
 
 
 def field_any_type():
@@ -75,4 +75,4 @@ def field_any_type():
         return Qgis.ProcessingFieldParameterDataType.Any
     from qgis.core import QgsProcessingParameterField
 
-    return QgsProcessingParameterField.Any
+    return QgsProcessingParameterField.DataType.Any
