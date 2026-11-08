@@ -2,7 +2,7 @@
 name=森林資源量メッシュ（20m）生成プラグイン
 qgisMinimumVersion=3.38
 description=Create 20 m forest-resource mesh grids (JF20mID) based on Japanese national base map sheets / 森林資源量集計メッシュ(20m)の格子を国土基本図図郭ベースで作成する
-about=森林情報に関するオープンデータ標準仕様書 Ver.2.1【航空レーザ森林資源解析データ編】（令和8年8月版）に基づく20mメッシュ（JF20mID付き）を、ポリゴン/ポイント/格子線で作成するProcessingアルゴリズムと、領域ポリゴン（流域など）・マスクに合わせて領域ごとに別レイヤで作成するアルゴリズムを提供します。属性の集計機能は含みません。実機検証：Windows 11／QGIS 3.44.15で3アルゴリズムの登録・代表実行、書き込み失敗、上書き防止、レイヤ読み込み等を確認済み。Linux／QGIS 3.44系（ヘッドレス）ではプラグイン初期化・Provider登録・3アルゴリズム実行、GeoPackage整合性、JF20mID重複なし、日本語パスへの出力を確認済み（検証対象ZIPはv0.4.5）。未検証：QGIS 3.38・3.40、macOS、Linux非rootユーザーでの読み取り専用フォルダ書き込み、系VIII以外とJGD2000のEPSGコード、その他のQGISバージョン。属性名JF20mIDは暫定名です.
+about=森林情報に関するオープンデータ標準仕様書 Ver.2.1【航空レーザ森林資源解析データ編】（令和8年8月版）に基づく20mメッシュ（JF20mID付き）を、ポリゴン/ポイント/格子線で作成するProcessingアルゴリズムと、領域ポリゴン（流域など）・マスクに合わせて領域ごとに別レイヤで作成するアルゴリズムを提供します。属性の集計機能は含みません。実機検証：Windows 11／QGIS 3.44.15で3アルゴリズムの登録・代表実行、書き込み失敗、上書き防止、レイヤ読み込み等を確認済み。Linux／QGIS 3.44系（ヘッドレス）ではプラグイン初期化・Provider登録・3アルゴリズム実行、GeoPackage整合性、JF20mID重複なし、日本語パスへの出力を確認済み（検証対象ZIPはv0.4.5）。未検証：QGIS 3.38・3.40、macOS、Linux非rootユーザーでの読み取り専用フォルダ書き込み、系VIII以外とJGD2000のEPSGコード、その他のQGISバージョン。属性名JF20mIDは暫定名です。
 version=0.4.6
 author=Yoichi Wada
 email=yo-1@geographic-information.net
