@@ -173,12 +173,20 @@ for _name in [k for k in sys.modules if k.startswith("forest_mesh20m")]:
 from forest_mesh20m.algorithms.provider import ForestMeshProvider  # noqa: E402
 
 registry = QgsApplication.processingRegistry()
-_provider = registry.providerById("forest_mesh20m")
-_added_provider = False
-if _provider is None:
-    _provider = ForestMeshProvider()
-    registry.addProvider(_provider)
-    _added_provider = True
+# 検証対象は必ず REPO のコードにする。既に同じ ID のプロバイダがあると、その既存インスタンス
+# （別のチェックアウト／インストール済み版）のアルゴリズムが実行され、REPO を試験したことにならない。
+_existing = registry.providerById("forest_mesh20m")
+if _existing is not None:
+    _existing_src = type(_existing).loadAlgorithms.__code__.co_filename
+    if ".qgis_dev_probe" not in _existing_src:
+        raise RuntimeError(
+            "forest_mesh20m プロバイダが既に登録されています（%s）。インストール済みのプラグインを無効化してから"
+            "実行してください（REPO の試験にならないため中止）。" % _existing_src)
+    registry.removeProvider(_existing)  # この検証スクリプト自身が過去に登録した一時プロバイダ
+_provider = ForestMeshProvider()
+registry.addProvider(_provider)
+_added_provider = True
+PROVIDER_SOURCE = type(_provider).loadAlgorithms.__code__.co_filename
 
 
 class FB(QgsProcessingFeedback):
@@ -618,7 +626,8 @@ def cancel_test():
 
 try:
     os.makedirs(OUT, exist_ok=True)
-    env = {"qgis": QgsApplication.applicationFullName(), "python": sys.version.split()[0], "repo": REPO}
+    env = {"qgis": QgsApplication.applicationFullName(), "python": sys.version.split()[0], "repo": REPO,
+           "provider_source": PROVIDER_SOURCE, "provider_matches_repo": os.path.normcase(os.path.abspath(REPO)) in os.path.normcase(os.path.abspath(PROVIDER_SOURCE))}
     if MODE == "functional":
         result = {"env": env, "result": functional()}
     elif MODE == "perf":
