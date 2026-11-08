@@ -1,3 +1,5 @@
+<img src="forest_mesh20m/icon.png" width="96" alt="forest-mesh20m アイコン（メッシュセルの上に立つ針葉樹）">
+
 # 森林資源量メッシュ（20m）生成プラグイン（forest_mesh20m）
 
 森林資源量集計メッシュ（20m・国土基本図図郭ベース）の**格子だけを作成する** QGIS プラグイン。
