@@ -39,7 +39,9 @@ class QgsGeometry:
 
 
 class FailingSink:
-    FastInsert = 2
+    class Flag:
+        # 実 QGIS と同じスコープ付き参照（QgsFeatureSink.Flag.FastInsert）に合わせる
+        FastInsert = 2
 
     def addFeatures(self, features, flags):
         return False

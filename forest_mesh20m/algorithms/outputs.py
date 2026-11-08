@@ -98,7 +98,7 @@ def build_features(
 
 
 def add_features(sink, features: List[QgsFeature]) -> bool:
-    ok = sink.addFeatures(features, QgsFeatureSink.FastInsert)
+    ok = sink.addFeatures(features, QgsFeatureSink.Flag.FastInsert)
     if not ok:
         raise QgsProcessingException(
             "メッシュの書き込みに失敗しました。出力は不完全です: %s"
